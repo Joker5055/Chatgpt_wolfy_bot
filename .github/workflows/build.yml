@@ -1,4 +1,4 @@
-name: Build gpt Hit Bot APK
+name: Build Wolfies Hit Bot APK
 
 on:
   workflow_dispatch:
