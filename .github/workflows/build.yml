@@ -1,0 +1,93 @@
+name: Build gpt Hit Bot APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Save application source
+        shell: bash
+        run: |
+          mkdir -p /tmp/wolfies-source
+          cp -a lib /tmp/wolfies-source/lib
+          cp pubspec.yaml /tmp/wolfies-source/pubspec.yaml
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Generate Android project
+        run: flutter create --platforms=android .
+
+      - name: Restore application source
+        shell: bash
+        run: |
+          rm -rf lib
+          cp -a /tmp/wolfies-source/lib ./lib
+          cp /tmp/wolfies-source/pubspec.yaml ./pubspec.yaml
+
+      - name: Configure Android manifest
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("android/app/src/main/AndroidManifest.xml")
+          text = path.read_text()
+
+          permission = (
+              '<uses-permission '
+              'android:name="android.permission.INTERNET"/>'
+          )
+
+          if "android.permission.INTERNET" not in text:
+              text = text.replace(
+                  "<manifest",
+                  "<manifest",
+                  1
+              )
+              pos = text.find(">")
+              text = text[:pos + 1] + "\n    " + permission + text[pos + 1:]
+
+          text = text.replace(
+              'android:label="wolfies_hit_bot"',
+              'android:label="Wolfies Hit Bot"'
+          )
+
+          path.write_text(text)
+          PY
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Check Dart formatting
+        run: dart format --output=none --set-exit-if-changed lib
+        continue-on-error: true
+
+      - name: Analyze Dart code
+        run: flutter analyze
+
+      - name: Build release APK
+        run: flutter build apk --release
+
+      - name: Upload release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: wolfies-hit-bot-release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+          retention-days: 14
